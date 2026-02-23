@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI DePara Categorizer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="hero">
+      <h1>AI DePara Categorizer</h1>
+      <p>Upload a spreadsheet, define categories, and generate semantic categorization in batches.</p>
+    </header>
+
+    <section class="card">
+      <h2>1. API Settings</h2>
+      <div class="grid">
+        <label>
+          OpenAI API Key
+          <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+        </label>
+        <label>
+          Model
+          <input id="model" type="text" value="gpt-4o-mini">
+        </label>
+        <label>
+          Batch Size
+          <input id="batchSize" type="number" value="50" min="1" max="500">
+        </label>
+        <label>
+          Delay Between Batches (seconds)
+          <input id="delaySeconds" type="number" value="0" min="0" step="0.25">
+        </label>
+      </div>
+      <label class="checkbox">
+        <input id="includeConfidence" type="checkbox">
+        Include AI confidence column
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>2. Upload File</h2>
+      <div class="row">
+        <input id="fileInput" type="file" accept=".csv,.xlsx">
+        <button id="uploadBtn" type="button">Upload</button>
+      </div>
+      <p id="uploadInfo" class="muted"></p>
+      <div id="previewContainer" class="table-wrap hidden"></div>
+      <label id="columnLabel" class="hidden">
+        Target Column
+        <select id="targetColumn"></select>
+      </label>
+    </section>
+
+    <section class="card">
+      <div class="row between">
+        <h2>3. Categories</h2>
+        <button id="addCategoryBtn" type="button">Add Category</button>
+      </div>
+      <div id="categories"></div>
+    </section>
+
+    <section class="card">
+      <h2>4. Run Processing</h2>
+      <div class="row">
+        <button id="processBtn" type="button">Start Processing</button>
+      </div>
+
+      <div class="progress-wrap">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      <p id="progressText" class="muted">Idle</p>
+      <pre id="logBox" class="log"></pre>
+    </section>
+
+    <section class="card">
+      <h2>5. Output</h2>
+      <div id="resultMeta" class="muted"></div>
+      <div id="resultPreview" class="table-wrap"></div>
+      <div class="row">
+        <a id="downloadBtn" class="btn hidden" href="#" download>Download Result</a>
+        <button id="reprocessBtn" class="hidden" type="button">Reprocess Failed Rows</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
