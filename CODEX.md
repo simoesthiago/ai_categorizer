@@ -1,7 +1,7 @@
-# CODEX.md - Implementation Guide for AI DePara Categorizer
+# CODEX.md - Implementation Guide for Ai Categorizer
 
 ## Objective
-Implement AI DePara Categorizer v1.0 as a local Flask web app for semantic batch categorization of `.xlsx` and `.csv` data, based on `docs/AI_DePara_Categorizer_PRD.pdf`.
+Implement Ai Categorizer v1.0 as a local Flask web app for semantic batch categorization of `.xlsx` and `.csv` data, based on `docs/AI_DePara_Categorizer_PRD.pdf`.
 
 ## Language rule
 - All app copy, documentation, labels, logs, and user-facing outputs must be in English.
