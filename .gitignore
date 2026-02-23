@@ -1,5 +1,12 @@
 .env
+.venv/
+venv/
+env/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+pip-wheel-metadata/
 skills/
 CODEX.md
