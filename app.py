@@ -27,22 +27,55 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_FILE_MB * 1024 * 1024
 STORE_LOCK = threading.Lock()
 FILE_STORE: dict[str, dict[str, Any]] = {}
 JOB_STORE: dict[str, dict[str, Any]] = {}
+STORE_TTL_SECONDS = 7200  # 2 hours
+
+
+def _cleanup_stores() -> None:
+    while True:
+        time.sleep(1800)  # run every 30 minutes
+        cutoff = datetime.now(timezone.utc).timestamp() - STORE_TTL_SECONDS
+        with STORE_LOCK:
+            expired_files = [
+                fid for fid, f in FILE_STORE.items()
+                if datetime.fromisoformat(f["uploaded_at"]).timestamp() < cutoff
+            ]
+            for fid in expired_files:
+                del FILE_STORE[fid]
+            expired_jobs = [
+                jid for jid, j in JOB_STORE.items()
+                if j["created_at"] and datetime.fromisoformat(j["created_at"]).timestamp() < cutoff
+            ]
+            for jid in expired_jobs:
+                del JOB_STORE[jid]
+
+
+threading.Thread(target=_cleanup_stores, daemon=True).start()
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def parse_dataframe(file_bytes: bytes, extension: str) -> pd.DataFrame:
+def parse_dataframe(
+    file_bytes: bytes,
+    extension: str,
+    sheet_name: str | None = None,
+    skip_rows: int = 0,
+) -> pd.DataFrame:
+    skip = skip_rows if skip_rows > 0 else None
     if extension == ".xlsx":
-        return pd.read_excel(io.BytesIO(file_bytes))
+        return pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet_name or 0, skiprows=skip)
 
     for encoding in ("utf-8-sig", "utf-8", "latin-1"):
         try:
-            return pd.read_csv(io.BytesIO(file_bytes), encoding=encoding)
+            return pd.read_csv(io.BytesIO(file_bytes), encoding=encoding, skiprows=skip)
         except UnicodeDecodeError:
             continue
     raise ValueError("Could not decode CSV file with utf-8 or latin-1.")
+
+
+def get_excel_sheet_names(file_bytes: bytes) -> list[str]:
+    return pd.ExcelFile(io.BytesIO(file_bytes)).sheet_names
 
 
 def dataframe_preview(df: pd.DataFrame, limit: int) -> list[dict[str, str]]:
@@ -125,6 +158,10 @@ def process_job(job_id: str, api_key: str) -> None:
         batch_size = job["batch_size"]
         include_confidence = job["include_confidence"]
         delay_seconds = job["delay_seconds"]
+        sample_size = job["sample_size"]
+
+    if sample_size is not None:
+        source_df = source_df.head(sample_size).reset_index(drop=True)
 
     update_job(job_id, status="running", started_at=utc_now(), progress_message="Starting processing...")
 
@@ -164,7 +201,7 @@ def process_job(job_id: str, api_key: str) -> None:
             progress_message="Processing finished.",
             failed_batches=result.failed_batches,
             result_df=output_df,
-            result_preview=dataframe_preview(output_df, 20),
+            result_preview=dataframe_preview(output_df, 50),
         )
     except Exception as exc:  # noqa: BLE001
         update_job(
@@ -247,7 +284,7 @@ def reprocess_failed_rows(job_id: str, api_key: str, failed_indices: list[int]) 
             progress_message="Reprocessing finished.",
             failed_batches=remapped_failed,
             result_df=result_df,
-            result_preview=dataframe_preview(result_df, 20),
+            result_preview=dataframe_preview(result_df, 50),
         )
     except Exception as exc:  # noqa: BLE001
         update_job(
@@ -280,7 +317,41 @@ def upload_file() -> Response:
         return jsonify({"error": "Uploaded file is empty."}), 400
 
     try:
-        df = parse_dataframe(file_bytes, extension)
+        skip_rows = max(0, int(request.form.get("skip_rows", 0) or 0))
+    except (TypeError, ValueError):
+        skip_rows = 0
+
+    # For multi-sheet Excel files, return sheet list and defer parsing.
+    if extension == ".xlsx":
+        try:
+            sheet_names = get_excel_sheet_names(file_bytes)
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"error": f"Could not read file: {exc}"}), 400
+
+        if len(sheet_names) > 1:
+            file_id = str(uuid.uuid4())
+            with STORE_LOCK:
+                FILE_STORE[file_id] = {
+                    "file_id": file_id,
+                    "filename": filename,
+                    "extension": extension,
+                    "raw_bytes": file_bytes,
+                    "sheet_names": sheet_names,
+                    "skip_rows": skip_rows,
+                    "dataframe": None,
+                    "uploaded_at": utc_now(),
+                }
+            return jsonify(
+                {
+                    "file_id": file_id,
+                    "filename": filename,
+                    "sheet_names": sheet_names,
+                    "needs_sheet_selection": True,
+                }
+            )
+
+    try:
+        df = parse_dataframe(file_bytes, extension, skip_rows=skip_rows)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": f"Could not read file: {exc}"}), 400
 
@@ -293,6 +364,7 @@ def upload_file() -> Response:
             "file_id": file_id,
             "filename": filename,
             "extension": extension,
+            "skip_rows": skip_rows,
             "dataframe": df,
             "uploaded_at": utc_now(),
         }
@@ -301,6 +373,54 @@ def upload_file() -> Response:
         {
             "file_id": file_id,
             "filename": filename,
+            "rows": int(len(df)),
+            "columns": [str(col) for col in df.columns],
+            "preview": dataframe_preview(df, 10),
+        }
+    )
+
+
+@app.route("/api/select_sheet", methods=["POST"])
+def select_sheet() -> Response:
+    payload = request.get_json(silent=True) or {}
+    file_id = str(payload.get("file_id", "")).strip()
+    sheet_name = str(payload.get("sheet_name", "")).strip()
+
+    if not file_id:
+        return jsonify({"error": "file_id is required."}), 400
+    if not sheet_name:
+        return jsonify({"error": "sheet_name is required."}), 400
+
+    with STORE_LOCK:
+        source = FILE_STORE.get(file_id)
+    if not source:
+        return jsonify({"error": "Invalid file_id."}), 404
+
+    sheet_names = source.get("sheet_names", [])
+    if sheet_name not in sheet_names:
+        return jsonify({"error": f"Sheet '{sheet_name}' not found in this file."}), 400
+
+    raw_bytes = source.get("raw_bytes")
+    if raw_bytes is None:
+        return jsonify({"error": "File bytes not available."}), 500
+
+    skip_rows = source.get("skip_rows", 0)
+    try:
+        df = parse_dataframe(raw_bytes, source["extension"], sheet_name=sheet_name, skip_rows=skip_rows)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": f"Could not read sheet: {exc}"}), 400
+
+    if df.empty:
+        return jsonify({"error": "Selected sheet has no data rows."}), 400
+
+    with STORE_LOCK:
+        FILE_STORE[file_id]["dataframe"] = df
+        FILE_STORE[file_id]["raw_bytes"] = None  # free memory
+
+    return jsonify(
+        {
+            "file_id": file_id,
+            "sheet_name": sheet_name,
             "rows": int(len(df)),
             "columns": [str(col) for col in df.columns],
             "preview": dataframe_preview(df, 10),
@@ -330,7 +450,9 @@ def process_file() -> Response:
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
-    df = source["dataframe"]
+    df = source.get("dataframe")
+    if df is None:
+        return jsonify({"error": "Sheet selection is still pending. Call /api/select_sheet first."}), 409
     try:
         resolved_column = resolve_target_column(df, target_column)
     except ValueError as exc:
@@ -345,7 +467,15 @@ def process_file() -> Response:
         return jsonify({"error": "batch_size must be a number."}), 400
     batch_size = max(1, min(batch_size, 500))
 
-    total_rows = int(len(df))
+    sample_size: int | None = None
+    raw_sample = payload.get("sample_size")
+    if raw_sample is not None:
+        try:
+            sample_size = max(1, min(int(raw_sample), len(df)))
+        except (TypeError, ValueError):
+            return jsonify({"error": "sample_size must be a number."}), 400
+
+    total_rows = int(sample_size if sample_size is not None else len(df))
     total_batches = max(1, math.ceil(total_rows / batch_size))
     job_id = str(uuid.uuid4())
     with STORE_LOCK:
@@ -359,6 +489,7 @@ def process_file() -> Response:
             "batch_size": batch_size,
             "include_confidence": include_confidence,
             "delay_seconds": delay_seconds,
+            "sample_size": sample_size,
             "created_at": utc_now(),
             "started_at": None,
             "completed_at": None,
@@ -417,11 +548,22 @@ def get_result(job_id: str) -> Response:
     if job["status"] == "failed":
         return jsonify({"error": job["error"] or "Processing failed."}), 400
 
+    result_df = job["result_df"]
+    target_col = job["target_column"]
+    enriched_batches = []
+    for batch in job["failed_batches"]:
+        rows_content = [
+            str(result_df.iloc[idx][target_col])
+            for idx in batch["row_indices"]
+            if idx < len(result_df)
+        ]
+        enriched_batches.append({**batch, "rows_content": rows_content})
+
     return jsonify(
         {
             "job_id": job_id,
             "status": job["status"],
-            "failed_batches": job["failed_batches"],
+            "failed_batches": enriched_batches,
             "preview": job["result_preview"],
         }
     )

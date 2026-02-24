@@ -1,12 +1,12 @@
 :root {
   --bg: #f4f3ee;
-  --text: #202022;
-  --muted: #65656f;
+  --text: #1e1e22;
+  --muted: #6b6b78;
   --card: #ffffff;
-  --accent: #0f766e;
-  --accent-soft: #d5f0ee;
+  --accent: #6c4fd8;
+  --accent-soft: #f0ecff;
   --danger: #b42318;
-  --border: #d9d9e2;
+  --border: #dddde8;
 }
 
 * {
@@ -15,7 +15,10 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
   background: radial-gradient(circle at 20% 0%, #ffffff, var(--bg) 58%);
   color: var(--text);
 }
@@ -67,13 +70,85 @@ button {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   margin-top: 6px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
   background: #fff;
+  transition: border-color 0.15s;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--accent);
+}
+
+select:disabled,
+input[type="number"]:disabled,
+input[type="text"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+select:disabled:hover,
+input:disabled:hover {
+  border-color: var(--border);
+}
+
+/* Upload controls row (Upload btn + settings, below the drop zone) */
+.upload-controls-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.upload-ctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+.upload-ctrl input[type="number"] {
+  width: 68px;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.upload-ctrl select {
+  width: auto;
+  min-width: 210px;
+  margin: 0;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+textarea {
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.6;
 }
 
 button,
@@ -86,11 +161,57 @@ button,
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
+  transition: filter 0.15s, opacity 0.15s;
 }
 
 button:hover,
 .btn:hover {
-  filter: brightness(0.95);
+  filter: brightness(0.93);
+}
+
+button:focus-visible,
+.btn:focus-visible,
+.btn-outline:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.btn-outline {
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.btn-outline:hover {
+  background: var(--accent-soft);
+}
+
+.hint {
+  margin: 6px 0 8px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.hint code {
+  background: #f0f1f8;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85rem;
+  color: var(--text);
 }
 
 .row {
@@ -112,15 +233,23 @@ button:hover,
 
 .checkbox {
   margin-top: 10px;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
   font-weight: 500;
 }
 
-.checkbox input {
+.checkbox input[type="checkbox"] {
   width: auto;
   margin: 0;
+}
+
+.inline-number {
+  width: 70px !important;
+  margin: 0 4px;
+  padding: 2px 6px;
+  display: inline-block;
 }
 
 .muted {
@@ -154,19 +283,10 @@ th {
   background: var(--accent-soft);
 }
 
-.category-row {
-  display: grid;
-  grid-template-columns: 1fr 2fr auto;
-  gap: 8px;
-  margin-bottom: 8px;
-  align-items: end;
+tbody tr:hover {
+  background: var(--accent-soft);
 }
 
-.category-row .remove-btn {
-  background: #fff;
-  color: var(--danger);
-  border-color: #efc3be;
-}
 
 .progress-wrap {
   margin-top: 12px;
@@ -179,7 +299,7 @@ th {
 .progress-bar {
   height: 14px;
   width: 0;
-  background: linear-gradient(90deg, #0f766e, #16a34a);
+  background: linear-gradient(90deg, #6c4fd8, #9f7ef5);
   transition: width 0.25s ease;
 }
 
@@ -191,13 +311,211 @@ th {
   padding: 10px;
   border-radius: 10px;
   background: #18181b;
-  color: #c9e7de;
+  color: #ddd6fe;
   font-size: 0.86rem;
   border: 1px solid #23232b;
 }
 
-@media (max-width: 720px) {
-  .category-row {
+/* Info icon + tooltip */
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-style: italic;
+  cursor: help;
+  margin-left: 4px;
+  vertical-align: middle;
+  position: relative;
+  flex-shrink: 0;
+  user-select: none;
+  transition: border-color 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.info-icon:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.info-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #18181b;
+  color: #f4f4f5;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 400;
+  font-style: normal;
+  white-space: normal;
+  width: 210px;
+  line-height: 1.45;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 200;
+  text-align: left;
+}
+
+.info-icon::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #18181b;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 200;
+}
+
+.info-icon:hover::after,
+.info-icon:hover::before {
+  opacity: 1;
+}
+
+/* Tooltip anchored to the right edge (for rightmost grid items) */
+.info-icon.tip-left::after {
+  left: auto;
+  right: -4px;
+  transform: none;
+}
+
+.info-icon.tip-left::before {
+  left: auto;
+  right: 6px;
+  transform: none;
+}
+
+/* Upload zone */
+.upload-zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 20px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: center;
+  color: var(--muted);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+/* × clear file button (top-right of upload zone) */
+.upload-clear-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 10;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.upload-clear-btn:hover {
+  background: #fef2f2;
+  color: var(--danger);
+  border-color: var(--danger);
+  filter: none;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.upload-zone.has-file {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.upload-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* Section step badge */
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Output placeholder */
+.output-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0 24px;
+  color: var(--muted);
+  gap: 10px;
+}
+
+.output-placeholder p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 700px) {
+  .grid {
     grid-template-columns: 1fr;
   }
+
+  .row.between {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .upload-controls-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .upload-ctrl select {
+    min-width: unset;
+    width: 100%;
+  }
 }
+
