@@ -1,4 +1,4 @@
-# Ai Categorizer
+# AI Categorizer
 
 Add in any spreadsheet a clean, consistent category column in a few clicks.
 
